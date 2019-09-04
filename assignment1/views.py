@@ -1,36 +1,39 @@
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.views import View
 from django.core import serializers
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from decimal import Decimal
 
 import json
 
-from .models import Quote
+from assignment1.models import Quote, QuotesSerializer, QuoteSerializer
 
 class QuotePostView(View):
     @method_decorator(csrf_exempt)
     def post(self, request):
-        # <view logic>
         data = request.body.decode('utf-8')
         body = json.loads(data)
-        quote = Quote(quote=body["quote"], author=body["author"], rating=body["rating"])
+        quote = Quote(**body)
         quote.save()
-        return HttpResponse('{"success": true, "id":' + quote.id + "}")
+        resp = {
+            "success": True,
+            "id": quote.id
+        }
+        return HttpResponse(json.dumps(resp))
 
 
 class QuotesView(View):
     def get(self, request):
         # <view logic>
-        quotes = Quote.objects.all()
-        return HttpResponse(serializers.serialize('json', quotes))
+        quotes = QuotesSerializer(Quote.objects.all())
+        return HttpResponse(json.dumps(quotes, cls=DecimalEncoder))
 
 class QuoteView(View):
     def get(self, request, pk):
         # <view logic>
-        quote = Quote.objects.get(id=pk)
-        quotes = json.loads(serializers.serialize('json', [quote, ]))
-        return HttpResponse(json.dumps(quotes[0]))
+        quote = QuoteSerializer(Quote.objects.get(id=pk))
+        return HttpResponse(json.dumps(quote, cls=DecimalEncoder))
 
     @method_decorator(csrf_exempt)
     def delete(self, request, pk):
@@ -42,6 +45,23 @@ class QuoteView(View):
         data = request.body.decode('utf-8')
         body = json.loads(data)
         quote = Quote.objects.get(id=pk)
-        quote = Quote(quote=body["quote"], author=body["author"], rating=body["rating"])
+        for key in body:
+            setattr(quote, key, body[key])
         quote.save()
         return HttpResponse('{"success": true}')
+
+    @method_decorator(csrf_exempt)
+    def patch(self, request, pk):
+        data = request.body.decode('utf-8')
+        body = json.loads(data)
+        quote = Quote.objects.get(id=pk)
+        for key in body:
+            setattr(quote, key, body[key])
+        quote.save()
+        return HttpResponse('{"success": true}')
+
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return float(obj)
+        return json.JSONEncoder.default(self, obj)
